@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+<!-- three.js library -->
+<script src='assets/js/libs/three.min.js'></script>
+<script src="assets/js/libs/DDSLoader.js"></script>
+<script src="assets/js/libs/MTLLoader.js"></script>
+<script src="assets/js/libs/OBJLoader.js"></script>
+
+<script src="assets/js/libs/VRControls.js"></script>
+<script src="assets/js/libs/VREffect.js"></script>
+<script src="assets/js/libs/webvr-polyfill.js"></script>
+<script src="assets/js/libs/webvr-manager.js"></script>
+
+<script src="assets/js/libs/Detector.js"></script>
+<script src="assets/js/libs/stats.min.js"></script>
+<!-- ar.js -->
+<script src="assets/js/libs/ar.min.js"></script>
+<style>
+  html, body {
+    position: relative;
+    height: 100%;
+  }
+  body {
+    position:fixed;
+    margin : 0px;
+    overflow: hidden;
+  }
+  button {
+    display: inline-block;
+    font-size: 24px;
+    line-height: 32px;
+    letter-spacing: 0px;
+    text-align: center;
+    font-weight: 400;
+    text-decoration: none;
+    outline: 0;
+    border:0;
+    transition: none;
+    height: 42px;
+    color:#fff;
+    display: flex; /* 子要素をflexboxで揃える */
+    justify-content: center; /* 子要素をflexboxにより中央に配置する */
+    align-items: center;  /* 子要素をflexboxにより中央に配置する */
+    cursor: pointer;
+  }
+  .control{
+    position:fixed;
+    top:50%;
+    left:0;
+    z-index:100;
+  }
+</style>
+<body>
+  <div class="control" ><button>play</button></div>
+<script>
+var videoFile="sample.mp4";
+var scene = new THREE.Scene();
+var renderer = new THREE.WebGLRenderer({
+  antialias: true,
+  alpha: true,
+});
+
+renderer.setClearColor(new THREE.Color("black"), 0);
+renderer.setSize(640, 480);
+renderer.domElement.style.position = "absolute";
+renderer.domElement.style.top = "0px";
+renderer.domElement.style.left = "0px";
+document.body.appendChild(renderer.domElement);
+
+var camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000 );
+var ambientLight = new THREE.AmbientLight( 0x222222, 0.4 );
+scene.add( ambientLight );
+var pointLight = new THREE.PointLight( 0xffffff, 0.8 );
+camera.add( pointLight );
+scene.add(camera);
+// array of functions for the rendering loop
+var onRenderFcts= [];
+
+//WebVR Boilerplate
+var controls = new THREE.VRControls(camera);
+controls.standing = true;
+var effect = new THREE.VREffect(renderer);
+effect.setSize(window.innerWidth, window.innerHeight);
+
+window.addEventListener('resize', onResize, true);
+window.addEventListener('vrdisplaypresentchange', onResize, true);
+
+var btn = document.querySelector('button');
+btn.disabled = true;
+
+var audio = new Audio();
+var video = document.createElement('video');
+var canvas = document.createElement('canvas');
+canvas.width = 1280;
+canvas.height = 640;
+var ctx = canvas.getContext('2d');
+var togglePlay;
+var ua = navigator.userAgent;
+var mode = 'none';
+
+if(/(iPhone|iPod)/.test(ua)) {
+  var prms1 = new Promise(function(resolve, reject) {
+    video.addEventListener('canplay',function(){
+      resolve();
+    });
+    video.addEventListener('error',function(){
+      reject();
+      alert('failed loading video');
+    });
+  });
+  var prms2 = new Promise(function(resolve, reject) {
+    audio.addEventListener('canplay',function(){
+      resolve();
+    });
+    audio.addEventListener('error',function(){
+      reject();
+      alert('failed loading audio');
+    });
+  });
+  Promise.all([prms1,prms2]).then(function(){
+    btn.disabled = false;
+    mode = 'currentTime';
+    makeSkybox();
+  });
+  video.src = videoFile;
+  video.load();
+  audio.src = videoFile;
+  audio.load();
+
+  togglePlay = function(){
+    if(audio.paused){
+      audio.play();
+      btn.innerHTML="pause";
+    } else {
+      audio.pause();
+      btn.innerHTML="play";
+    }
+  };
+} else { // Androidなどは素直にVideoタグで再生
+  //video.style.display = 'block';
+  video.src = videoFile;
+  video.load();
+  video.addEventListener('canplay',function(){
+    btn.disabled = false;
+    mode = 'defaultPlay';
+    makeSkybox();
+  },false);
+  video.addEventListener('error',function(){
+      alert('failed loading video');
+  });
+
+  togglePlay = function(){
+    if(video.paused){
+      video.play();
+    } else {
+      video.pause();
+    }
+  };
+}
+btn.addEventListener('click',togglePlay);
+
+////////////////////////////////////////////////////////////////////////////////
+//          handle arToolkitSource
+////////////////////////////////////////////////////////////////////////////////
+var arToolkitSource = new THREEx.ArToolkitSource({
+  // to read from the webcam
+  sourceType : 'webcam',
+})
+
+arToolkitSource.init(function onReady(){
+  onResize()
+})
+
+// handle resize
+window.addEventListener('resize', function(){
+  onResize()
+})
+function onResize(){
+  arToolkitSource.onResize()
+  arToolkitSource.copySizeTo(renderer.domElement)
+  if( arToolkitContext.arController !== null ){
+    arToolkitSource.copySizeTo(arToolkitContext.arController.canvas)
+  }
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+}
+//===================================================================
+// arToolkitContext（カメラパラメータ、マーカ検出設定）
+//===================================================================
+// create atToolkitContext
+var arToolkitContext = new THREEx.ArToolkitContext({
+  debug: false,
+  cameraParametersUrl: '/assets/data/camera_para.dat',
+  detectionMode: 'mono',
+  imageSmoothingEnabled: true,
+  maxDetectionRate: 30,
+  canvasWidth: 80*3,
+  canvasHeight: 60*3,
+})
+// initialize it
+arToolkitContext.init(function onCompleted(){
+  // copy projection matrix to camera
+  camera.projectionMatrix.copy( arToolkitContext.getProjectionMatrix() );
+})
+
+// update artoolkit on every frame
+onRenderFcts.push(function(){
+  if( arToolkitSource.ready === false )  return
+  arToolkitContext.update( arToolkitSource.domElement )
+})
+
+////////////////////////////////////////////////////////////////////////////////
+//          Create a ArMarkerControls
+////////////////////////////////////////////////////////////////////////////////
+var markerRoot = new THREE.Group
+var artoolkitMarker = new THREEx.ArMarkerControls(arToolkitContext, markerRoot, {
+  type : 'pattern',
+  patternUrl : '/assets/data/patt.hiro'
+})
+scene.add(markerRoot)
+
+// build a smoothedControls
+var smoothedRoot = new THREE.Group()
+scene.add(smoothedRoot)
+var smoothedControls = new THREEx.ArSmoothedControls(smoothedRoot, {
+  lerpPosition: 0.4,
+  lerpQuaternion: 0.3,
+  lerpScale: 1,
+})
+onRenderFcts.push(function(delta){
+  smoothedControls.update(markerRoot)
+})
+
+smoothedControls.addEventListener('becameVisible', function(){
+  // alert('becameVisible event notified')
+})
+smoothedControls.addEventListener('becameUnVisible', function(){
+  // alert('becameUnVisible event notified')
+})
+//////////////////////////////////////////////////////////////////////////////////
+//    add an object in the scene
+//////////////////////////////////////////////////////////////////////////////////
+
+var arWorldRoot = smoothedRoot
+// model
+var onProgress = function ( xhr ) {
+  if ( xhr.lengthComputable ) {
+    var percentComplete = xhr.loaded / xhr.total * 100;
+    console.log( Math.round(percentComplete, 2) + '% downloaded' );
+  }
+};
+
+var onError = function ( xhr ) { };
+
+var mtlLoader = new THREE.MTLLoader();
+mtlLoader.setPath( '/assets/data/obj/' );
+mtlLoader.setCrossOrigin('anonymous');
+mtlLoader.load( 'Earth.mtl', function( materials ) {
+  materials.preload();
+  var objLoader = new THREE.OBJLoader();
+  objLoader.setMaterials( materials );
+  objLoader.setPath( '/assets/data/obj/' );
+  objLoader.load( 'Earth.obj', function ( object ) {
+    object.scale.set(0.02, 0.02, 0.02);
+    object.position.set(0, 0.1, 0);
+    markerRoot.add( object );
+    onRenderFcts.push(function(delta){
+      object.rotation.y += 0.1;
+    })
+  }, onProgress, onError );
+});
+
+var videoTexture = new THREE.Texture(canvas);
+videoTexture.minFilter = THREE.LinearFilter;
+videoTexture.magFilter = THREE.LinearFilter;
+
+var sky;
+function makeSkybox(){
+  var material = new THREE.MeshBasicMaterial({map: videoTexture, overdraw: true, side:THREE.DoubleSide});
+  var geometry = new THREE.SphereGeometry( 500, 20, 20 );
+  geometry.scale( -1, 1, 1 );
+  sky = new THREE.Mesh( geometry, material );
+
+  sky.rotation.z  = 9.5;
+  sky.rotation.y  = 30;
+  sky.rotation.x  = 0.5;
+  markerRoot.add( sky );
+}
+
+//////////////////////////////////////////////////////////////////////////////////
+//    render the whole thing on the page
+//////////////////////////////////////////////////////////////////////////////////
+// render the scene
+onRenderFcts.push(function(){
+  renderer.render( scene, camera );
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+      //videoImageContext.drawImage(video, 0, 0);
+      if (videoTexture) {
+        videoTexture.needsUpdate = true;
+      }
+
+      if(mode == "currentTime")video.currentTime = audio.currentTime;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    }
+    controls.update();//step1 control
+})
+
+// run the rendering loop
+var lastTimeMsec= null
+requestAnimationFrame(function animate(nowMsec){
+  // keep looping
+  requestAnimationFrame( animate );
+  // measure time
+  lastTimeMsec  = lastTimeMsec || nowMsec-1000/60
+  var deltaMsec  = Math.min(200, nowMsec - lastTimeMsec)
+  lastTimeMsec  = nowMsec
+  // call each update function
+  onRenderFcts.forEach(function(onRenderFct){
+    onRenderFct(deltaMsec/1000, nowMsec/1000)
+  })
+})
+</script></body>
