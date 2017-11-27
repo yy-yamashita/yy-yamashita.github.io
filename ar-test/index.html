@@ -190,7 +190,7 @@ function onResize(){
 // create atToolkitContext
 var arToolkitContext = new THREEx.ArToolkitContext({
   debug: false,
-  cameraParametersUrl: '/assets/data/camera_para.dat',
+  cameraParametersUrl: 'assets/data/camera_para.dat',
   detectionMode: 'mono',
   imageSmoothingEnabled: true,
   maxDetectionRate: 30,
@@ -215,7 +215,7 @@ onRenderFcts.push(function(){
 var markerRoot = new THREE.Group
 var artoolkitMarker = new THREEx.ArMarkerControls(arToolkitContext, markerRoot, {
   type : 'pattern',
-  patternUrl : '/assets/data/patt.hiro'
+  patternUrl : 'assets/data/patt.hiro'
 })
 scene.add(markerRoot)
 
@@ -253,13 +253,13 @@ var onProgress = function ( xhr ) {
 var onError = function ( xhr ) { };
 
 var mtlLoader = new THREE.MTLLoader();
-mtlLoader.setPath( '/assets/data/obj/' );
+mtlLoader.setPath( 'assets/data/obj/' );
 mtlLoader.setCrossOrigin('anonymous');
 mtlLoader.load( 'Earth.mtl', function( materials ) {
   materials.preload();
   var objLoader = new THREE.OBJLoader();
   objLoader.setMaterials( materials );
-  objLoader.setPath( '/assets/data/obj/' );
+  objLoader.setPath( 'assets/data/obj/' );
   objLoader.load( 'Earth.obj', function ( object ) {
     object.scale.set(0.02, 0.02, 0.02);
     object.position.set(0, 0.1, 0);
